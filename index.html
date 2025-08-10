@@ -291,9 +291,7 @@
   <body>
     <div class="container">
       <h1>📄 PDF Initial Stamper</h1>
-      <p class="subtitle">
-        Add your initials to every page of your PDF documents
-      </p>
+      <p class="subtitle">An Eni Ghana ICT Productivity Tool</p>
 
       <form id="stampForm">
         <div class="form-group">
@@ -508,11 +506,15 @@
         progressFill.style.width = percentage + '%';
         progressText.textContent = `${stage}... ${percentage}%`;
         progressDetails.textContent = `${current} of ${total} pages completed`;
+
+        // Force DOM update
+        progressFill.offsetHeight;
       }
 
       // Show/hide progress
       function showProgress(show = true) {
         progressContainer.style.display = show ? 'block' : 'none';
+        statusDiv.style.display = show ? 'none' : 'block';
         if (!show) {
           progressFill.style.width = '0%';
         }
@@ -523,59 +525,60 @@
         return new Promise((resolve) => setTimeout(resolve, ms));
       }
 
-      // Process pages in batches to avoid blocking
+      // Process pages in smaller batches with more frequent updates
       async function processPagesBatch(
         pages,
         font,
         initials,
         fontSize,
         textColor,
-        position,
-        batchSize = 5
+        position
       ) {
         const total = pages.length;
+        const batchSize = total > 50 ? 2 : 5; // Smaller batches for large files
 
-        for (let i = 0; i < total; i += batchSize) {
-          const batch = pages.slice(i, Math.min(i + batchSize, total));
+        progressText.textContent = `Processing ${total} pages...`;
+        progressDetails.textContent = `Starting batch processing...`;
 
-          // Process current batch
-          for (let j = 0; j < batch.length; j++) {
-            const page = batch[j];
-            const { width, height } = page.getSize();
+        for (let i = 0; i < total; i++) {
+          const page = pages[i];
+          const { width, height } = page.getSize();
 
-            // Calculate text dimensions
-            const textWidth = font.widthOfTextAtSize(initials, fontSize);
-            const textHeight = font.heightAtSize(fontSize);
+          // Calculate text dimensions
+          const textWidth = font.widthOfTextAtSize(initials, fontSize);
+          const textHeight = font.heightAtSize(fontSize);
 
-            // Get position coordinates
-            const { x, y } = getPositionCoordinates(
-              position,
-              width,
-              height,
-              textWidth,
-              textHeight
-            );
+          // Get position coordinates
+          const { x, y } = getPositionCoordinates(
+            position,
+            width,
+            height,
+            textWidth,
+            textHeight
+          );
 
-            // Add text to page
-            page.drawText(initials, {
-              x: x,
-              y: y,
-              size: fontSize,
-              font: font,
-              color: rgb(textColor.r, textColor.g, textColor.b),
-              opacity: 0.8,
-            });
-          }
+          // Add text to page
+          page.drawText(initials, {
+            x: x,
+            y: y,
+            size: fontSize,
+            font: font,
+            color: rgb(textColor.r, textColor.g, textColor.b),
+            opacity: 0.8,
+          });
 
-          // Update progress
-          const completed = Math.min(i + batchSize, total);
-          updateProgress(completed, total, 'Adding initials');
+          // Update progress after each page for large files, or every batch for smaller files
+          if (total > 50 || (i + 1) % batchSize === 0 || i === total - 1) {
+            updateProgress(i + 1, total, 'Adding initials');
 
-          // Yield control to prevent blocking
-          if (i + batchSize < total) {
-            await delay(10);
+            // Yield control more frequently for large files
+            if (i % (total > 100 ? 1 : batchSize) === 0) {
+              await delay(1);
+            }
           }
         }
+
+        updateProgress(total, total, 'Initials added');
       }
       async function getPdfFont(pdfDoc, fontStyle) {
         const fontMap = {
@@ -675,70 +678,115 @@
         }
 
         try {
-          showStatus(
-            'Loading PDF... Please wait for large files.',
-            'processing'
-          );
           showProgress(true);
           processBtn.disabled = true;
-          statusDiv.style.display = 'none';
 
-          // Update progress for loading
-          updateProgress(0, 100, 'Loading PDF');
-
-          // Read the PDF file with progress indication
+          // Step 1: Loading file
+          updateProgress(5, 100, 'Loading PDF file');
           const arrayBuffer = await file.arrayBuffer();
-          updateProgress(25, 100, 'Loading PDF');
+          await delay(50);
 
-          // Load PDF document
+          // Step 2: Parsing PDF
+          updateProgress(15, 100, 'Parsing PDF structure');
           const pdfDoc = await PDFDocument.load(arrayBuffer);
-          updateProgress(50, 100, 'Analyzing PDF');
+          await delay(50);
 
-          // Get font
+          // Step 3: Loading font
+          updateProgress(25, 100, 'Loading font');
           const font = await getPdfFont(pdfDoc, fontStyle);
-          updateProgress(60, 100, 'Preparing fonts');
+          await delay(50);
 
-          // Get all pages
+          // Step 4: Getting pages
+          updateProgress(35, 100, 'Analyzing pages');
           const pages = pdfDoc.getPages();
           const totalPages = pages.length;
+          await delay(50);
 
-          updateProgress(70, 100, 'Preparing processing');
-
-          // Show page count for large documents
-          if (totalPages > 50) {
-            progressDetails.textContent = `Processing ${totalPages} pages - this may take a few minutes...`;
+          // Show detailed info for large documents
+          if (totalPages >= 100) {
+            progressDetails.textContent = `Large document detected: ${totalPages} pages. Processing each page individually...`;
+          } else if (totalPages >= 50) {
+            progressDetails.textContent = `Medium document: ${totalPages} pages. This will take about ${Math.round(
+              totalPages / 10
+            )} seconds...`;
           }
 
-          // Process pages in batches
-          await processPagesBatch(
-            pages,
-            font,
-            initials,
-            fontSize,
-            textColor,
-            position
-          );
+          // Step 5: Process pages (40% to 90% of progress)
+          updateProgress(40, 100, 'Starting page processing');
 
-          // Update progress for saving
-          updateProgress(90, 100, 'Saving PDF');
-          await delay(100); // Small delay to show progress
+          // Custom progress tracking for page processing
+          const startTime = Date.now();
+          for (let i = 0; i < totalPages; i++) {
+            const page = pages[i];
+            const { width, height } = page.getSize();
 
-          // Save the PDF with progress indication
+            // Calculate text dimensions
+            const textWidth = font.widthOfTextAtSize(initials, fontSize);
+            const textHeight = font.heightAtSize(fontSize);
+
+            // Get position coordinates
+            const { x, y } = getPositionCoordinates(
+              position,
+              width,
+              height,
+              textWidth,
+              textHeight
+            );
+
+            // Add text to page
+            page.drawText(initials, {
+              x: x,
+              y: y,
+              size: fontSize,
+              font: font,
+              color: rgb(textColor.r, textColor.g, textColor.b),
+              opacity: 0.8,
+            });
+
+            // Update progress - 40% to 90% range for page processing
+            const pageProgress = 40 + (50 * (i + 1)) / totalPages;
+            updateProgress(Math.round(pageProgress), 100, 'Adding initials');
+            progressDetails.textContent = `Page ${
+              i + 1
+            } of ${totalPages} processed`;
+
+            // Yield control every few pages
+            if (i % 3 === 0) {
+              await delay(1);
+            }
+
+            // Show time estimate for large files
+            if (i === 9 && totalPages > 50) {
+              const elapsed = Date.now() - startTime;
+              const estimated = Math.round((elapsed * totalPages) / 10000);
+              progressDetails.textContent = `Page ${
+                i + 1
+              } of ${totalPages} - Est. ${estimated}s remaining`;
+            }
+          }
+
+          // Step 6: Saving PDF
+          updateProgress(92, 100, 'Preparing final PDF');
+          await delay(100);
+
           const pdfBytes = await pdfDoc.save({
-            useObjectStreams: false, // Better compatibility for large files
+            useObjectStreams: false,
             addDefaultPage: false,
           });
 
-          updateProgress(100, 100, 'Complete');
+          updateProgress(98, 100, 'Finalizing download');
+          await delay(100);
 
           // Download the modified PDF
           downloadFile(pdfBytes, file.name);
 
+          updateProgress(100, 100, 'Complete');
+          await delay(500);
+
           showProgress(false);
+          const processingTime = Math.round((Date.now() - startTime) / 1000);
           showStatus(
-            `✅ Success! PDF processed with ${totalPages} pages stamped. ${
-              totalPages > 100 ? 'Large file processing completed!' : ''
-            }`,
+            `✅ Success! ${totalPages} pages processed in ${processingTime} seconds. PDF ready for download!`,
             'success'
           );
         } catch (error) {
