@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Initial Stamper</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .container {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        max-width: 500px;
+        width: 100%;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+      }
+
+      h1 {
+        color: #333;
+        margin-bottom: 10px;
+        font-size: 2.2em;
+        font-weight: 700;
+      }
+
+      .subtitle {
+        color: #666;
+        margin-bottom: 40px;
+        font-size: 1.1em;
+      }
+
+      .form-group {
+        margin-bottom: 25px;
+        text-align: left;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+        font-size: 0.9em;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      input[type='text'],
+      input[type='number'],
+      select {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #e1e5e9;
+        border-radius: 10px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        background: #f8f9fa;
+      }
+
+      input[type='text']:focus,
+      input[type='number']:focus,
+      select:focus {
+        outline: none;
+        border-color: #667eea;
+        background: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+      }
+
+      input[type='color'] {
+        width: 60px;
+        height: 40px;
+        border: 2px solid #e1e5e9;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      input[type='color']:hover {
+        border-color: #667eea;
+        transform: scale(1.05);
+      }
+
+      .file-input-wrapper {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+      }
+
+      .file-input {
+        position: absolute;
+        left: -9999px;
+      }
+
+      .file-input-button {
+        display: inline-block;
+        padding: 15px 30px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-weight: 600;
+        width: 100%;
+        text-align: center;
+        border: none;
+        font-size: 16px;
+      }
+
+      .file-input-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+      }
+
+      .process-btn {
+        background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-top: 20px;
+        width: 100%;
+      }
+
+      .process-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(81, 207, 102, 0.3);
+      }
+
+      .process-btn:disabled {
+        background: #dee2e6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .status {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 10px;
+        font-weight: 500;
+        display: none;
+      }
+
+      .status.success {
+        background: #d3f9d8;
+        color: #2b8a3e;
+        border: 1px solid #8ce99a;
+      }
+
+      .status.error {
+        background: #ffe0e6;
+        color: #c92a2a;
+        border: 1px solid #ffa8a8;
+      }
+
+      .status.processing {
+        background: #e7f5ff;
+        color: #1864ab;
+        border: 1px solid #74c0fc;
+      }
+
+      .file-info {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 8px;
+        margin-top: 10px;
+        font-size: 0.9em;
+        color: #666;
+        display: none;
+      }
+
+      .settings-row {
+        display: flex;
+        gap: 15px;
+        align-items: end;
+      }
+
+      .settings-row .form-group {
+        flex: 1;
+      }
+
+      .preview-box {
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 15px 0;
+        min-height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .preview-initials {
+        font-weight: bold;
+        font-size: 1.2em;
+      }
+
+      @media (max-width: 600px) {
+        .container {
+          margin: 10px;
+          padding: 30px 20px;
+        }
+
+        h1 {
+          font-size: 1.8em;
+        }
+
+        .settings-row {
+          flex-direction: column;
+          gap: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>📄 PDF Initial Stamper</h1>
+      <p class="subtitle">An Eni Ghana ICT productivity tool</p>
+
+      <form id="stampForm">
+        <div class="form-group">
+          <label for="initials">Your Initials</label>
+          <input
+            type="text"
+            id="initials"
+            maxlength="4"
+            placeholder="e.g. JD"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="fontStyle">Font Style</label>
+          <select id="fontStyle">
+            <option value="Helvetica">Helvetica (Clean)</option>
+            <option value="Helvetica-Bold">Helvetica Bold</option>
+            <option value="Helvetica-Oblique">Helvetica Italic</option>
+            <option value="Times-Roman">Times Roman (Serif)</option>
+            <option value="Times-Bold">Times Bold</option>
+            <option value="Times-Italic">Times Italic</option>
+            <option value="Courier">Courier (Mono)</option>
+            <option value="Courier-Bold">Courier Bold</option>
+            <option value="Courier-Oblique">Courier Italic</option>
+          </select>
+        </div>
+
+        <div class="settings-row">
+          <div class="form-group">
+            <label for="fontSize">Font Size</label>
+            <input type="number" id="fontSize" min="8" max="72" value="12" />
+          </div>
+          <div class="form-group">
+            <label for="textColor">Color</label>
+            <input type="color" id="textColor" value="#666666" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="position">Position</label>
+          <select id="position">
+            <option value="bottom-right">Bottom Right</option>
+            <option value="bottom-left">Bottom Left</option>
+            <option value="bottom-center">Bottom Center</option>
+            <option value="top-right">Top Right</option>
+            <option value="top-left">Top Left</option>
+            <option value="top-center">Top Center</option>
+          </select>
+        </div>
+
+        <div class="preview-box">
+          <div class="preview-initials" id="preview">
+            Enter initials to preview
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="pdfFile">Select PDF File</label>
+          <div class="file-input-wrapper">
+            <input
+              type="file"
+              id="pdfFile"
+              class="file-input"
+              accept=".pdf"
+              required
+            />
+            <label for="pdfFile" class="file-input-button">
+              📁 Choose PDF File
+            </label>
+          </div>
+          <div id="fileInfo" class="file-info"></div>
+        </div>
+
+        <button type="submit" class="process-btn" id="processBtn" disabled>
+          ⚡ Add Initials to PDF
+        </button>
+      </form>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <script>
+      const { PDFDocument, rgb, StandardFonts } = PDFLib;
+
+      // Elements
+      const form = document.getElementById('stampForm');
+      const initialsInput = document.getElementById('initials');
+      const fontSizeInput = document.getElementById('fontSize');
+      const fontStyleSelect = document.getElementById('fontStyle');
+      const textColorInput = document.getElementById('textColor');
+      const positionSelect = document.getElementById('position');
+      const pdfFileInput = document.getElementById('pdfFile');
+      const processBtn = document.getElementById('processBtn');
+      const statusDiv = document.getElementById('status');
+      const fileInfo = document.getElementById('fileInfo');
+      const preview = document.getElementById('preview');
+
+      // Font mapping for preview
+      const fontPreviewMap = {
+        Helvetica: 'Arial, sans-serif',
+        'Helvetica-Bold': 'Arial, sans-serif',
+        'Helvetica-Oblique': 'Arial, sans-serif',
+        'Times-Roman': 'Times, serif',
+        'Times-Bold': 'Times, serif',
+        'Times-Italic': 'Times, serif',
+        Courier: 'Courier New, monospace',
+        'Courier-Bold': 'Courier New, monospace',
+        'Courier-Oblique': 'Courier New, monospace',
+      };
+
+      // Update preview
+      function updatePreview() {
+        const initials = initialsInput.value.toUpperCase() || 'JD';
+        const fontSize = fontSizeInput.value;
+        const fontStyle = fontStyleSelect.value;
+        const color = textColorInput.value;
+
+        preview.textContent = initials;
+        preview.style.fontSize = Math.max(fontSize / 2, 10) + 'px';
+        preview.style.color = color;
+        preview.style.fontFamily =
+          fontPreviewMap[fontStyle] || 'Arial, sans-serif';
+
+        // Apply font weight and style
+        if (fontStyle.includes('Bold')) {
+          preview.style.fontWeight = 'bold';
+        } else {
+          preview.style.fontWeight = 'normal';
+        }
+
+        if (fontStyle.includes('Italic') || fontStyle.includes('Oblique')) {
+          preview.style.fontStyle = 'italic';
+        } else {
+          preview.style.fontStyle = 'normal';
+        }
+      }
+
+      // Event listeners for preview
+      initialsInput.addEventListener('input', updatePreview);
+      fontSizeInput.addEventListener('input', updatePreview);
+      fontStyleSelect.addEventListener('change', updatePreview);
+      textColorInput.addEventListener('change', updatePreview);
+
+      // File input handling
+      pdfFileInput.addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (file) {
+          fileInfo.style.display = 'block';
+          fileInfo.innerHTML = `
+                    <strong>File:</strong> ${file.name}<br>
+                    <strong>Size:</strong> ${(file.size / 1024 / 1024).toFixed(
+                      2
+                    )} MB
+                `;
+          processBtn.disabled = !initialsInput.value;
+        } else {
+          fileInfo.style.display = 'none';
+          processBtn.disabled = true;
+        }
+      });
+
+      initialsInput.addEventListener('input', function () {
+        processBtn.disabled = !this.value || !pdfFileInput.files[0];
+      });
+
+      // Convert hex color to RGB
+      function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result
+          ? {
+              r: parseInt(result[1], 16) / 255,
+              g: parseInt(result[2], 16) / 255,
+              b: parseInt(result[3], 16) / 255,
+            }
+          : { r: 0.4, g: 0.4, b: 0.4 };
+      }
+
+      // Get PDF-lib font from selection
+      async function getPdfFont(pdfDoc, fontStyle) {
+        const fontMap = {
+          Helvetica: StandardFonts.Helvetica,
+          'Helvetica-Bold': StandardFonts.HelveticaBold,
+          'Helvetica-Oblique': StandardFonts.HelveticaOblique,
+          'Times-Roman': StandardFonts.TimesRoman,
+          'Times-Bold': StandardFonts.TimesRomanBold,
+          'Times-Italic': StandardFonts.TimesRomanItalic,
+          Courier: StandardFonts.Courier,
+          'Courier-Bold': StandardFonts.CourierBold,
+          'Courier-Oblique': StandardFonts.CourierOblique,
+        };
+
+        return await pdfDoc.embedFont(
+          fontMap[fontStyle] || StandardFonts.Helvetica
+        );
+      }
+      function getPositionCoordinates(
+        position,
+        pageWidth,
+        pageHeight,
+        textWidth,
+        textHeight
+      ) {
+        const margin = 20;
+
+        switch (position) {
+          case 'bottom-right':
+            return { x: pageWidth - textWidth - margin, y: margin };
+          case 'bottom-left':
+            return { x: margin, y: margin };
+          case 'bottom-center':
+            return { x: (pageWidth - textWidth) / 2, y: margin };
+          case 'top-right':
+            return {
+              x: pageWidth - textWidth - margin,
+              y: pageHeight - textHeight - margin,
+            };
+          case 'top-left':
+            return { x: margin, y: pageHeight - textHeight - margin };
+          case 'top-center':
+            return {
+              x: (pageWidth - textWidth) / 2,
+              y: pageHeight - textHeight - margin,
+            };
+          default:
+            return { x: pageWidth - textWidth - margin, y: margin };
+        }
+      }
+
+      // Show status message
+      function showStatus(message, type) {
+        statusDiv.textContent = message;
+        statusDiv.className = `status ${type}`;
+        statusDiv.style.display = 'block';
+
+        if (type === 'success' || type === 'error') {
+          setTimeout(() => {
+            statusDiv.style.display = 'none';
+          }, 5000);
+        }
+      }
+
+      // Download file
+      function downloadFile(pdfBytes, originalFileName) {
+        const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+
+        // Create new filename
+        const baseName = originalFileName.replace('.pdf', '');
+        const initials = initialsInput.value.toUpperCase();
+        a.download = `${baseName}_${initials}_stamped.pdf`;
+
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      // Main form submission
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const file = pdfFileInput.files[0];
+        const initials = initialsInput.value.toUpperCase();
+        const fontSize = parseInt(fontSizeInput.value);
+        const fontStyle = fontStyleSelect.value;
+        const textColor = hexToRgb(textColorInput.value);
+        const position = positionSelect.value;
+
+        if (!file || !initials) {
+          showStatus('Please select a file and enter your initials.', 'error');
+          return;
+        }
+
+        try {
+          showStatus('Processing PDF... Please wait.', 'processing');
+          processBtn.disabled = true;
+
+          // Read the PDF file
+          const arrayBuffer = await file.arrayBuffer();
+          const pdfDoc = await PDFDocument.load(arrayBuffer);
+
+          // Get font
+          const font = await getPdfFont(pdfDoc, fontStyle);
+
+          // Get all pages
+          const pages = pdfDoc.getPages();
+
+          // Add initials to each page
+          for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+            const { width, height } = page.getSize();
+
+            // Calculate text dimensions
+            const textWidth = font.widthOfTextAtSize(initials, fontSize);
+            const textHeight = font.heightAtSize(fontSize);
+
+            // Get position coordinates
+            const { x, y } = getPositionCoordinates(
+              position,
+              width,
+              height,
+              textWidth,
+              textHeight
+            );
+
+            // Add text to page
+            page.drawText(initials, {
+              x: x,
+              y: y,
+              size: fontSize,
+              font: font,
+              color: rgb(textColor.r, textColor.g, textColor.b),
+              opacity: 0.8,
+            });
+          }
+
+          // Save the PDF
+          const pdfBytes = await pdfDoc.save();
+
+          // Download the modified PDF
+          downloadFile(pdfBytes, file.name);
+
+          showStatus(
+            `✅ Success! PDF processed with ${pages.length} pages stamped.`,
+            'success'
+          );
+        } catch (error) {
+          console.error('Error processing PDF:', error);
+          showStatus(`❌ Error processing PDF: ${error.message}`, 'error');
+        } finally {
+          processBtn.disabled = false;
+        }
+      });
+
+      // Initialize preview
+      updatePreview();
+    </script>
+  </body>
+</html>
