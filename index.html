@@ -191,6 +191,49 @@
         border: 1px solid #74c0fc;
       }
 
+      .progress-container {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+        display: none;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 20px;
+        background: #dee2e6;
+        border-radius: 10px;
+        overflow: hidden;
+        margin: 10px 0;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #51cf66, #40c057);
+        width: 0%;
+        transition: width 0.3s ease;
+        border-radius: 10px;
+      }
+
+      .progress-text {
+        text-align: center;
+        font-weight: 600;
+        color: #333;
+        margin: 10px 0;
+      }
+
+      .file-size-warning {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+        padding: 10px;
+        border-radius: 8px;
+        margin-top: 10px;
+        font-size: 0.9em;
+        display: none;
+      }
+
       .file-info {
         background: #f8f9fa;
         padding: 10px;
@@ -248,7 +291,9 @@
   <body>
     <div class="container">
       <h1>📄 PDF Initial Stamper</h1>
-      <p class="subtitle">An Eni Ghana ICT productivity tool</p>
+      <p class="subtitle">
+        Add your initials to every page of your PDF documents
+      </p>
 
       <form id="stampForm">
         <div class="form-group">
@@ -321,12 +366,27 @@
             </label>
           </div>
           <div id="fileInfo" class="file-info"></div>
+          <div id="fileSizeWarning" class="file-size-warning">
+            ⚠️ Large file detected. Processing may take several minutes. Please
+            be patient and don't close this tab.
+          </div>
         </div>
 
         <button type="submit" class="process-btn" id="processBtn" disabled>
           ⚡ Add Initials to PDF
         </button>
       </form>
+
+      <div class="progress-container" id="progressContainer">
+        <div class="progress-text" id="progressText">Processing...</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div
+          style="font-size: 0.9em; color: #666; text-align: center"
+          id="progressDetails"
+        ></div>
+      </div>
 
       <div id="status" class="status"></div>
     </div>
@@ -346,6 +406,11 @@
       const statusDiv = document.getElementById('status');
       const fileInfo = document.getElementById('fileInfo');
       const preview = document.getElementById('preview');
+      const progressContainer = document.getElementById('progressContainer');
+      const progressFill = document.getElementById('progressFill');
+      const progressText = document.getElementById('progressText');
+      const progressDetails = document.getElementById('progressDetails');
+      const fileSizeWarning = document.getElementById('fileSizeWarning');
 
       // Font mapping for preview
       const fontPreviewMap = {
@@ -397,16 +462,26 @@
       pdfFileInput.addEventListener('change', function (e) {
         const file = e.target.files[0];
         if (file) {
+          const fileSizeMB = file.size / 1024 / 1024;
           fileInfo.style.display = 'block';
           fileInfo.innerHTML = `
                     <strong>File:</strong> ${file.name}<br>
-                    <strong>Size:</strong> ${(file.size / 1024 / 1024).toFixed(
-                      2
-                    )} MB
+                    <strong>Size:</strong> ${fileSizeMB.toFixed(2)} MB
                 `;
+
+          // Show warning for large files (>10MB)
+          if (fileSizeMB > 10) {
+            fileSizeWarning.style.display = 'block';
+            processBtn.innerHTML = '⏳ Process Large PDF';
+          } else {
+            fileSizeWarning.style.display = 'none';
+            processBtn.innerHTML = '⚡ Add Initials to PDF';
+          }
+
           processBtn.disabled = !initialsInput.value;
         } else {
           fileInfo.style.display = 'none';
+          fileSizeWarning.style.display = 'none';
           processBtn.disabled = true;
         }
       });
@@ -427,7 +502,81 @@
           : { r: 0.4, g: 0.4, b: 0.4 };
       }
 
-      // Get PDF-lib font from selection
+      // Update progress
+      function updateProgress(current, total, stage = 'Processing') {
+        const percentage = Math.round((current / total) * 100);
+        progressFill.style.width = percentage + '%';
+        progressText.textContent = `${stage}... ${percentage}%`;
+        progressDetails.textContent = `${current} of ${total} pages completed`;
+      }
+
+      // Show/hide progress
+      function showProgress(show = true) {
+        progressContainer.style.display = show ? 'block' : 'none';
+        if (!show) {
+          progressFill.style.width = '0%';
+        }
+      }
+
+      // Delay function for yielding control
+      function delay(ms) {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      // Process pages in batches to avoid blocking
+      async function processPagesBatch(
+        pages,
+        font,
+        initials,
+        fontSize,
+        textColor,
+        position,
+        batchSize = 5
+      ) {
+        const total = pages.length;
+
+        for (let i = 0; i < total; i += batchSize) {
+          const batch = pages.slice(i, Math.min(i + batchSize, total));
+
+          // Process current batch
+          for (let j = 0; j < batch.length; j++) {
+            const page = batch[j];
+            const { width, height } = page.getSize();
+
+            // Calculate text dimensions
+            const textWidth = font.widthOfTextAtSize(initials, fontSize);
+            const textHeight = font.heightAtSize(fontSize);
+
+            // Get position coordinates
+            const { x, y } = getPositionCoordinates(
+              position,
+              width,
+              height,
+              textWidth,
+              textHeight
+            );
+
+            // Add text to page
+            page.drawText(initials, {
+              x: x,
+              y: y,
+              size: fontSize,
+              font: font,
+              color: rgb(textColor.r, textColor.g, textColor.b),
+              opacity: 0.8,
+            });
+          }
+
+          // Update progress
+          const completed = Math.min(i + batchSize, total);
+          updateProgress(completed, total, 'Adding initials');
+
+          // Yield control to prevent blocking
+          if (i + batchSize < total) {
+            await delay(10);
+          }
+        }
+      }
       async function getPdfFont(pdfDoc, fontStyle) {
         const fontMap = {
           Helvetica: StandardFonts.Helvetica,
@@ -526,63 +675,101 @@
         }
 
         try {
-          showStatus('Processing PDF... Please wait.', 'processing');
+          showStatus(
+            'Loading PDF... Please wait for large files.',
+            'processing'
+          );
+          showProgress(true);
           processBtn.disabled = true;
+          statusDiv.style.display = 'none';
 
-          // Read the PDF file
+          // Update progress for loading
+          updateProgress(0, 100, 'Loading PDF');
+
+          // Read the PDF file with progress indication
           const arrayBuffer = await file.arrayBuffer();
+          updateProgress(25, 100, 'Loading PDF');
+
+          // Load PDF document
           const pdfDoc = await PDFDocument.load(arrayBuffer);
+          updateProgress(50, 100, 'Analyzing PDF');
 
           // Get font
           const font = await getPdfFont(pdfDoc, fontStyle);
+          updateProgress(60, 100, 'Preparing fonts');
 
           // Get all pages
           const pages = pdfDoc.getPages();
+          const totalPages = pages.length;
 
-          // Add initials to each page
-          for (let i = 0; i < pages.length; i++) {
-            const page = pages[i];
-            const { width, height } = page.getSize();
+          updateProgress(70, 100, 'Preparing processing');
 
-            // Calculate text dimensions
-            const textWidth = font.widthOfTextAtSize(initials, fontSize);
-            const textHeight = font.heightAtSize(fontSize);
-
-            // Get position coordinates
-            const { x, y } = getPositionCoordinates(
-              position,
-              width,
-              height,
-              textWidth,
-              textHeight
-            );
-
-            // Add text to page
-            page.drawText(initials, {
-              x: x,
-              y: y,
-              size: fontSize,
-              font: font,
-              color: rgb(textColor.r, textColor.g, textColor.b),
-              opacity: 0.8,
-            });
+          // Show page count for large documents
+          if (totalPages > 50) {
+            progressDetails.textContent = `Processing ${totalPages} pages - this may take a few minutes...`;
           }
 
-          // Save the PDF
-          const pdfBytes = await pdfDoc.save();
+          // Process pages in batches
+          await processPagesBatch(
+            pages,
+            font,
+            initials,
+            fontSize,
+            textColor,
+            position
+          );
+
+          // Update progress for saving
+          updateProgress(90, 100, 'Saving PDF');
+          await delay(100); // Small delay to show progress
+
+          // Save the PDF with progress indication
+          const pdfBytes = await pdfDoc.save({
+            useObjectStreams: false, // Better compatibility for large files
+            addDefaultPage: false,
+          });
+
+          updateProgress(100, 100, 'Complete');
 
           // Download the modified PDF
           downloadFile(pdfBytes, file.name);
 
+          showProgress(false);
           showStatus(
-            `✅ Success! PDF processed with ${pages.length} pages stamped.`,
+            `✅ Success! PDF processed with ${totalPages} pages stamped. ${
+              totalPages > 100 ? 'Large file processing completed!' : ''
+            }`,
             'success'
           );
         } catch (error) {
           console.error('Error processing PDF:', error);
-          showStatus(`❌ Error processing PDF: ${error.message}`, 'error');
+          showProgress(false);
+
+          let errorMessage = `❌ Error processing PDF: ${error.message}`;
+
+          // Provide specific error messages for common issues
+          if (error.message.includes('Invalid PDF')) {
+            errorMessage =
+              '❌ Invalid PDF file. Please select a valid PDF document.';
+          } else if (
+            error.message.includes('memory') ||
+            error.message.includes('size')
+          ) {
+            errorMessage =
+              '❌ File too large for browser processing. Try a smaller PDF or split the document.';
+          } else if (error.message.includes('corrupt')) {
+            errorMessage =
+              '❌ PDF file appears to be corrupted. Please try a different file.';
+          }
+
+          showStatus(errorMessage, 'error');
         } finally {
           processBtn.disabled = false;
+          processBtn.innerHTML =
+            pdfFileInput.files[0] &&
+            pdfFileInput.files[0].size / 1024 / 1024 > 10
+              ? '⏳ Process Large PDF'
+              : '⚡ Add Initials to PDF';
         }
       });
 
